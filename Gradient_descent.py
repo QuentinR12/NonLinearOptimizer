@@ -4,7 +4,33 @@ from Line_search import Armijo_backtracking, Wolfe_backtracking
 
 def Steepest_descent(f, grad_f, x0, line_search_method, alpha_init, tau, c1, c2, tol, max_iter, max_time, *args):
     """
-    Steepest Descent Method
+    Steepest Descent Method.
+    Parameters:
+    f : callable
+        The objective function to minimize.
+    grad_f : callable
+        The gradient of the objective function.
+    x0 : array_like
+        Initial guess for the variables.
+    alpha_init : float
+        Initial step size.
+    c1 : float
+        Parameter for sufficient decrease condition.
+    tau : float
+        Reduction factor for step size.
+    tol : float
+        Tolerance for convergence.
+    max_iter : int
+        Maximum number of iterations.
+    *args : tuple
+        Additional arguments to pass to the objective function and its gradient.
+    Returns:
+    x_k : array_like
+        The point that minimizes the objective function.
+    f_val : float
+        The value of the objective function at the minimum point.
+    k : int
+        Number of iterations performed.
     """
     start_time = time.time()
     x_k = np.array(x0, dtype=float)
