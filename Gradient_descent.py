@@ -40,6 +40,10 @@ def Steepest_descent(f, grad_f, x0, line_search_method, alpha_init, tau, c1, c2,
     grad_stop_cond = tol * max(1, norm_grad)
     k = 0
 
+    # tracking history of function values and norm of gradients
+    f_history = [f_xk]
+    grad_history = [norm_grad]
+
     # Determine once which line search method to use
     use_wolfe = (line_search_method == 'Wolfe')
 
@@ -66,8 +70,12 @@ def Steepest_descent(f, grad_f, x0, line_search_method, alpha_init, tau, c1, c2,
         f_xk = new_f
         grad_xk = grad_f(x_k, *args)
         norm_grad = np.linalg.norm(grad_xk)
+        
+        f_history.append(f_xk)
+        grad_history.append(norm_grad)
+        
         k += 1
 
     elapsed_time = time.time() - start_time
     print(f"Converged in {k} iterations and elapsed time {elapsed_time:.2f} seconds.")
-    return x_k, f_xk, k, elapsed_time
+    return x_k, f_xk, k, elapsed_time, f_history, grad_history

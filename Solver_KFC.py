@@ -5,7 +5,7 @@ from Beale_function import beale, beale_gradient, beale_hessian
 from The_function import the_function, the_function_gradient, the_function_hessian
 from Line_search import Armijo_backtracking, Wolfe_backtracking
 from Gradient_descent import Steepest_descent
-from Newton_method import Newton_modified, Newton_CG, BFGS, L_BFGS
+from Newton_method import Newton_modified, Newton_CG, BFGS, L_BFGS, DFP
 
 # Classes as defined before
 class Problem:
@@ -60,27 +60,32 @@ class OptSolver_KFC:
         
         # Select the optimization method based on method name
         if self.method.name == 'GradientDescent':
-            self.x, self.f_x, self.n_iter, self.elapsed_time = Steepest_descent(
+            self.x, self.f_x, self.n_iter, self.elapsed_time, self.f_history, self.grad_history = Steepest_descent(
                 self.f, self.grad, self.x0, self.line_search.name, self.line_search.alpha,
                 self.line_search.tau, self.line_search.c1, self.line_search.c2,
                 self.method.tol, self.method.max_iter, self.method.max_time, *args)
         elif self.method.name == 'ModifiedNewton':
-            self.x, self.f_x, self.n_iter, self.elapsed_time = Newton_modified(
+            self.x, self.f_x, self.n_iter, self.elapsed_time, self.f_history, self.grad_history = Newton_modified(
                 self.f, self.grad, self.hess, self.x0, self.line_search.name, self.line_search.alpha,
                 self.line_search.tau, self.line_search.c1, self.line_search.c2,
                 self.method.beta, self.method.tol, self.method.max_iter, self.method.max_time, *args)
         elif self.method.name == 'NewtonCG':
-            self.x, self.f_x, self.n_iter, self.elapsed_time = Newton_CG(
+            self.x, self.f_x, self.n_iter, self.elapsed_time, self.f_history, self.grad_history = Newton_CG(
                 self.f, self.grad, self.hess, self.x0, self.line_search.name, self.line_search.alpha,
                 self.line_search.tau, self.line_search.c1, self.line_search.c2,
                 self.method.eta, self.method.tol, self.method.max_iter, self.method.max_time, *args)
         elif self.method.name == 'BFGS':
-            self.x, self.f_x, self.n_iter, self.elapsed_time = BFGS(
+            self.x, self.f_x, self.n_iter, self.elapsed_time, self.f_history, self.grad_history = BFGS(
                 self.f, self.grad, self.x0, self.line_search.name, self.line_search.alpha,
                 self.line_search.tau, self.line_search.c1, self.line_search.c2,
                 self.method.eps_min, self.method.tol, self.method.max_iter, self.method.max_time, *args)
         elif self.method.name == 'L_BFGS':
-            self.x, self.f_x, self.n_iter, self.elapsed_time = L_BFGS(
+            self.x, self.f_x, self.n_iter, self.elapsed_time, self.f_history, self.grad_history = L_BFGS(
+                self.f, self.grad, self.x0, self.line_search.name, self.line_search.alpha,
+                self.line_search.tau, self.line_search.c1, self.line_search.c2,
+                self.method.eps_min, self.method.tol, self.method.max_iter, self.method.max_time, *args)
+        elif self.method.name == 'DFP':
+            self.x, self.f_x, self.n_iter, self.elapsed_time, self.f_history, self.grad_history = DFP(
                 self.f, self.grad, self.x0, self.line_search.name, self.line_search.alpha,
                 self.line_search.tau, self.line_search.c1, self.line_search.c2,
                 self.method.eps_min, self.method.tol, self.method.max_iter, self.method.max_time, *args)

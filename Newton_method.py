@@ -116,6 +116,10 @@ def Newton_modified(f, grad_f, hess_f, x0, line_search_method, alpha_init, tau, 
     hess_xk = hess_f(x_k, *args)
     k = 0
 
+    # tracking history of function values and norm of gradients
+    f_history = [f_xk]
+    grad_history = [np.linalg.norm(grad_xk)]
+
     # Determine once which line search method to use
     use_wolfe = (line_search_method == 'Wolfe')
 
@@ -141,7 +145,8 @@ def Newton_modified(f, grad_f, hess_f, x0, line_search_method, alpha_init, tau, 
         f_xk = f(x_k, *args)
         grad_xk = grad_f(x_k, *args)
         hess_xk = hess_f(x_k, *args)
-
+        f_history.append(f_xk)
+        grad_history.append(np.linalg.norm(grad_xk))
         k += 1
 
         # print(f"{k:4d}  {f_xk:10.2e}  {np.linalg.norm(grad_xk):10.2e}  {alpha_k:10.2e}")
@@ -150,7 +155,7 @@ def Newton_modified(f, grad_f, hess_f, x0, line_search_method, alpha_init, tau, 
     elapsed_time  = stop_time - start_time
     print(f"Converged in {k} iterations and and elapsed_time  {elapsed_time:.2f} seconds.")
 
-    return x_k, f_xk, k, elapsed_time
+    return x_k, f_xk, k, elapsed_time, f_history, grad_history
 
 def Cholesky_with_multiple_of_identity(A, beta):
     """
@@ -178,6 +183,107 @@ def Cholesky_with_multiple_of_identity(A, beta):
             delta = np.max([2 * delta, beta])
 
     return L
+
+def DFP(f, grad_f, x0, line_search_method, alpha_init, tau, c1, c2,
+        eps_min, tol, max_iter, max_time, *args):
+    """
+    DFP quasi-Newton Method for optimization.
+    Parameters:
+    -----------
+    f : callable
+        The objective to minimize.
+    grad_f : callable
+        Its gradient.
+    x0 : array_like
+        Initial guess.
+    line_search_method : str
+        'Wolfe' or anything else (Armijo).
+    alpha_init : float
+        Initial step length for Armijo.
+    tau : float
+        Armijo reduction factor.
+    c1, c2 : float
+        Line-search constants.
+    eps_min : float
+        Safeguard for update denominator.
+    tol : float
+        Tolerance for ‖∇f‖ stopping criterion.
+    max_iter : int
+        Maximum number of iterations.
+    max_time : float
+        Timeout in seconds.
+    *args :
+        Extra arguments passed to f and grad_f.
+    Returns:
+    --------
+    x_k : array_like
+        Approximate minimizer.
+    f_xk : float
+        Objective value at x_k.
+    k : int
+        Iteration count.
+    elapsed_time : float
+        Total runtime.
+    """
+    start_time = time.time()
+    x_k = x0
+    f_xk = f(x_k, *args)
+    grad_xk = grad_f(x_k, *args)
+    norm0 = jnp.linalg.norm(grad_xk)
+    grad_stop = tol * max(1, norm0)
+
+    n = len(x_k)
+    I = np.eye(n)
+    H_k = I.copy()
+    k = 0
+    
+    # tracking history of function values and norm of gradients
+    f_history = [f_xk]
+    grad_history = [np.linalg.norm(grad_xk)]
+    
+    use_wolfe = (line_search_method == 'Wolfe')
+
+    while (k < max_iter and np.linalg.norm(grad_xk) > grad_stop and time.time() - start_time < max_time):
+
+        # search direction
+        p_k = -H_k @ grad_xk
+        dpsi_0 = grad_xk.T @ p_k
+
+        # line search
+        if use_wolfe:
+            alpha_k = Wolfe_backtracking(
+                f, grad_f, x_k, f_xk, p_k, dpsi_0, c1, c2, *args)
+        else:
+            alpha_k = Armijo_backtracking(
+                f, x_k, f_xk, p_k, dpsi_0, alpha_init, c1, tau, *args)
+
+        # update iterate
+        x_kp1 = x_k + alpha_k * p_k
+        s_k = x_kp1 - x_k
+        grad_xkp1 = grad_f(x_kp1, *args)
+        y_k = grad_xkp1 - grad_xk
+
+        # DFP update
+        yTs = y_k.T @ s_k
+        if yTs > eps_min * np.linalg.norm(y_k) * np.linalg.norm(s_k):
+            Hy = H_k @ y_k
+            yHy = y_k.T @ Hy
+            H_k = (H_k
+                   + np.outer(s_k, s_k) / yTs
+                   - np.outer(Hy, Hy) / yHy)
+
+        # prepare next iteration
+        x_k = x_kp1
+        f_xk = f(x_k, *args)
+        grad_xk = deepcopy(grad_xkp1)
+        f_history.append(f_xk)
+        grad_history.append(np.linalg.norm(grad_xk))
+        k += 1
+
+    elapsed_time = time.time() - start_time
+    print(f"Converged in {k} iterations and elapsed_time {elapsed_time:.2f} seconds.")
+    return x_k, f_xk, k, elapsed_time, f_history, grad_history
+
 
 def BFGS(f, grad_f, x0, line_search_method, alpha_init, tau, c1, c2, eps_min, tol, max_iter, max_time, *args):
     """
@@ -220,7 +326,11 @@ def BFGS(f, grad_f, x0, line_search_method, alpha_init, tau, c1, c2, eps_min, to
     I = np.eye(n)
     H_k = I
     k = 0
-
+    
+    # tracking history of function values and norm of gradients
+    f_history = [f_xk]
+    grad_history = [np.linalg.norm(grad_xk)]
+    
     # Determine once which line search method to use
     use_wolfe = (line_search_method == 'Wolfe')
 
@@ -247,6 +357,8 @@ def BFGS(f, grad_f, x0, line_search_method, alpha_init, tau, c1, c2, eps_min, to
         x_k = x_kp1
         f_xk = f(x_k, *args)
         grad_xk = deepcopy(grad_xkp1)
+        f_history.append(f_xk)
+        grad_history.append(np.linalg.norm(grad_xk))
         k += 1
         # print(f"{k:4d}  {f_xk:10.2e}  {np.linalg.norm(grad_xk):10.2e}  {alpha_k:10.2e}")
 
@@ -254,7 +366,7 @@ def BFGS(f, grad_f, x0, line_search_method, alpha_init, tau, c1, c2, eps_min, to
     elapsed_time  = stop_time - start_time
     print(f"Converged in {k} iterations and and elapsed_time  {elapsed_time:.2f} seconds.")
 
-    return x_k, f_xk, k, elapsed_time
+    return x_k, f_xk, k, elapsed_time, f_history, grad_history
 
 def L_BFGS(f, grad_f, x0, line_search_method, alpha_init, tau, c1, c2, eps_min, tol, max_iter, max_time, *args):
     """
@@ -295,7 +407,11 @@ def L_BFGS(f, grad_f, x0, line_search_method, alpha_init, tau, c1, c2, eps_min, 
     grad_stop_cond = tol * max(1, norm_grad_x0)
     gamma_k = 1 
     k = 0
-
+    
+    # tracking history of function values and norm of gradients
+    f_history = [f_xk]
+    grad_history = [np.linalg.norm(grad_xk)]
+    
     n = len(x_k)
     m = min(n, 10)
     s_list = []
@@ -354,6 +470,8 @@ def L_BFGS(f, grad_f, x0, line_search_method, alpha_init, tau, c1, c2, eps_min, 
         x_k = x_kp1
         f_xk = f(x_k, *args)
         grad_xk = grad_xkp1
+        f_history.append(f_xk)
+        grad_history.append(np.linalg.norm(grad_xk))
         k += 1
         # print(f"{k:4d}  {f_xk:10.2e}  {np.linalg.norm(grad_xk):10.2e}  {alpha_k:10.2e}")
 
@@ -361,7 +479,7 @@ def L_BFGS(f, grad_f, x0, line_search_method, alpha_init, tau, c1, c2, eps_min, 
     elapsed_time  = stop_time - start_time
     print(f"Converged in {k} iterations and and elapsed_time  {elapsed_time:.2f} seconds.")
 
-    return x_k, f_xk, k, elapsed_time
+    return x_k, f_xk, k, elapsed_time, f_history, grad_history
 
 def Newton_CG(f, grad_f, hess_f, x0, line_search_method, alpha_init, tau, c1, c2, eta, tol, max_iter, max_time, *args):
     """
@@ -405,7 +523,11 @@ def Newton_CG(f, grad_f, hess_f, x0, line_search_method, alpha_init, tau, c1, c2
     diff_x = 1e10
     diff_f = 1e10
     k = 0
-
+    
+    # tracking history of function values and norm of gradients
+    f_history = [f_xk]
+    grad_history = [np.linalg.norm(grad_xk)]
+    
     # Determine once which line search method to use
     use_wolfe = (line_search_method == 'Wolfe')
 
@@ -446,7 +568,8 @@ def Newton_CG(f, grad_f, hess_f, x0, line_search_method, alpha_init, tau, c1, c2
         f_xk = f(x_k, *args)
         grad_xk = grad_f(x_k, *args)
         hess_xk = hess_f(x_k, *args)
-
+        f_history.append(f_xk)
+        grad_history.append(np.linalg.norm(grad_xk))
         k += 1
 
         # print(f"{k:4d}  {f_xk:10.2e}  {np.linalg.norm(grad_xk):10.2e}  {alpha_k:10.2e}")
@@ -455,4 +578,4 @@ def Newton_CG(f, grad_f, hess_f, x0, line_search_method, alpha_init, tau, c1, c2
     elapsed_time  = stop_time - start_time
     print(f"Converged in {k} iterations and and elapsed_time  {elapsed_time:.2f} seconds.")
 
-    return x_k, f_xk, k, elapsed_time
+    return x_k, f_xk, k, elapsed_time, f_history, grad_history
